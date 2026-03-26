@@ -69,13 +69,38 @@ try:
         def __init__(self):
             self._agent = _StrategyAgent()
         async def run(self, data=None):
-            # Strategy agent uses make_decision which takes scanner_signal and sentiment
-            scanner_signal = data.get('scanner_signal', 0.5) if data else 0.5
-            sentiment = data.get('sentiment', 0.5) if data else 0.5
-            decision = self._agent.make_decision(scanner_signal, sentiment)
+            # Extract signals from scanner and sentiment results
+            scanner_signal = 0.5
+            sentiment_signal = 0.5
+            
+            if data:
+                # From scanner results (take first/primary asset)
+                if 'scanner' in data and isinstance(data['scanner'], dict):
+                    results = data['scanner'].get('results', [])
+                    if results and isinstance(results, list) and len(results) > 0:
+                        scanner_signal = results[0].get('signal', 0.5)
+                
+                # From sentiment results
+                if 'sentiment' in data and isinstance(data['sentiment'], dict):
+                    results = data['sentiment'].get('results', [])
+                    if results and isinstance(results, list) and len(results) > 0:
+                        sentiment_signal = results[0].get('sentiment_score', 0.5)
+            
+            decision = self._agent.make_decision(scanner_signal, sentiment_signal)
+            
+            # Add pair info for execution
+            if 'scanner' in data and isinstance(data['scanner'], dict):
+                results = data['scanner'].get('results', [])
+                if results and isinstance(results, list) and len(results) > 0:
+                    asset = results[0].get('asset', 'BTC')
+                    decision['pair'] = f"{asset}/USDT"
+            else:
+                decision['pair'] = "BTC/USDT"
+            
             # Reduce position size to avoid exceeding limits (max 10% of account)
             if 'position_size' in decision:
                 decision['position_size'] = min(decision['position_size'], 0.001)  # Max 0.001 BTC
+            
             return {"status": "success", "strategy": decision, "decision": decision}
 except ImportError:
     class StrategyAgent:
