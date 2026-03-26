@@ -34,19 +34,31 @@ class HyperliquidAPI:
         try:
             from hyperliquid.info import Info
             from hyperliquid.exchange import Exchange
+            from eth_account import Account
             
             # Initialize Info (for reading data - no auth needed)
-            self.info = Info() if is_testnet else Info(mainnet=True)
+            # For testnet, we need to specify the base_url explicitly
+            if is_testnet:
+                self.info = Info(base_url="https://api.hyperliquid-testnet.xyz")
+            else:
+                self.info = Info(mainnet=True)
+            
+            # Create wallet account from private key
+            self.wallet = Account.from_key(secret)
             
             # Initialize Exchange (for trading - needs auth)
-            if is_testnet:
-                self.exchange = Exchange(secret, wallet_address=api_key)
-            else:
-                self.exchange = Exchange(secret, wallet_address=api_key, mainnet=True)
+            base_url = "https://api.hyperliquid-testnet.xyz" if is_testnet else None
+            self.exchange = Exchange(
+                wallet=self.wallet,
+                base_url=base_url
+            )
                 
-            logger.info(f"Hyperliquid SDK initialized (testnet={is_testnet}, mock={mock_mode})")
+            logger.info(f"Hyperliquid SDK initialized (testnet={is_testnet}, mock={mock_mode}, wallet={self.wallet.address[:10]}...)")
         except ImportError as e:
             logger.error(f"Failed to import hyperliquid-python-sdk: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to initialize Hyperliquid SDK: {e}")
             raise
         
     async def close(self):
