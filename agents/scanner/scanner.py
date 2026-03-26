@@ -11,7 +11,7 @@ import numpy as np
 import sqlite3
 
 from .config import get_config, get_timeframes, get_pairs
-from agents.execution.hyperliquid_api import PriceFetcher
+from agents.execution.binance_price_fetcher import BinancePriceFetcher
 
 
 class Scanner:
@@ -25,8 +25,8 @@ class Scanner:
         self.pairs = get_pairs()
         self.db_path = self.config["database_path"]
         
-        # Initialize price fetcher
-        self.price_fetcher = PriceFetcher(is_testnet=True)
+        # Initialize Binance price fetcher
+        self.price_fetcher = BinancePriceFetcher(demo_mode=True)
         
         # Setup logging
         logging.basicConfig(level=self.config["log_level"])
