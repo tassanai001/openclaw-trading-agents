@@ -96,15 +96,27 @@ except ImportError:
     class RiskAgent:
         async def run(self, data=None): return {"status": "success", "risk": data or {}}
 
-# Execution Agent
+# Execution Agent (Adapter Pattern - Binance Demo/Hyperliquid)
 try:
-    from agents.execution.execution import ExecutionAgent as _ExecutionAgent
-    from agents.execution.config import ExecutionConfig
+    from agents.execution.execution_agent import ExecutionAgent as _ExecutionAgent
+    import os
+    
     class ExecutionAgent:
         def __init__(self):
-            config = ExecutionConfig(paper_trading=True)
-            self._agent = _ExecutionAgent(config)
+            # Get exchange from environment (default: binance)
+            exchange = os.getenv('ACTIVE_EXCHANGE', 'binance')
+            self._agent = _ExecutionAgent(exchange=exchange)
+            self._initialized = False
+            
+        async def _ensure_initialized(self):
+            if not self._initialized:
+                await self._agent.initialize()
+                self._initialized = True
+            
         async def run(self, data=None):
+            # Ensure adapter is initialized
+            await self._ensure_initialized()
+            
             # data structure: {'status': 'success', 'risk': {'status': 'success', 'strategy': {'decision': {...}}}}
             if data and isinstance(data, dict):
                 # Navigate to decision
@@ -120,28 +132,70 @@ try:
                 if decision and isinstance(decision, dict) and decision.get('decision') in ['LONG', 'SHORT', 'WAIT']:
                     asset = decision.get('pair', 'BTC/USDT').split('/')[0]
                     decision_type = decision.get('decision')
+                    combined_signal = decision.get('combined_signal', 0.0)
+                    position_size = decision.get('position_size', 0.001)
                     
-                    # Use execute_from_signal for new signal-based execution
-                    if hasattr(self._agent, 'execute_from_signal'):
-                        combined_signal = decision.get('combined_signal', 0.0)
-                        result = await self._agent.execute_from_signal(asset, combined_signal)
-                        return {"status": "success", "execution": {"success": result.success, "error": result.error, "order_id": result.order_id, "action": decision_type}, "paper_trading": True}
-                    
-                    # Fallback to old method
-                    signal = {
-                        'asset': asset,
-                        'side': 'B' if decision_type == 'LONG' else 'S',
-                        'size': decision.get('position_size', 0.001),
-                        'price': None,
-                        'order_type': 'market',
-                        'leverage': 1
-                    }
-                    if decision_type == 'SHORT':
-                        signal['side'] = 'S'
-                    result = await self._agent.execute_order(signal)
-                    return {"status": "success", "execution": {"success": result.success, "error": result.error, "order_id": result.order_id}, "paper_trading": True}
-            return {"status": "success", "execution": {}, "paper_trading": True}
-except ImportError:
+                    # Execute trade using new adapter-based execution
+                    try:
+                        # Get current price
+                        symbol = f"{asset}USDT"
+                        price = await self._agent.adapter.get_ticker_price(symbol)
+                        
+                        # Place order
+                        from agents.execution.models.order import Order
+                        from agents.execution.models.common import OrderSide, OrderType
+                        
+                        side = OrderSide.BUY if decision_type == 'LONG' else OrderSide.SELL
+                        
+                        # Skip if WAIT/HOLD signal
+                        if decision_type == 'WAIT' or abs(combined_signal) < 0.2:
+                            return {
+                                "status": "success",
+                                "execution": {
+                                    "success": True,
+                                    "action": "HOLD",
+                                    "reason": f"Signal {combined_signal:.3f} within HOLD range"
+                                },
+                                "paper_trading": False
+                            }
+                        
+                        order = Order(
+                            symbol=symbol,
+                            side=side,
+                            type=OrderType.MARKET,
+                            quantity=position_size
+                        )
+                        
+                        result = await self._agent.adapter.place_order(order)
+                        
+                        return {
+                            "status": "success",
+                            "execution": {
+                                "success": result.success,
+                                "action": decision_type,
+                                "order_id": result.order_id,
+                                "filled_quantity": result.filled_quantity,
+                                "filled_price": result.filled_price,
+                                "fee": result.fee,
+                                "error": result.message if not result.success else None
+                            },
+                            "paper_trading": False
+                        }
+                        
+                    except Exception as e:
+                        return {
+                            "status": "error",
+                            "execution": {
+                                "success": False,
+                                "error": str(e)
+                            },
+                            "paper_trading": False
+                        }
+                        
+            return {"status": "success", "execution": {}, "paper_trading": False}
+            
+except ImportError as e:
+    print(f"Warning: Could not import new ExecutionAgent: {e}")
     class ExecutionAgent:
         async def run(self, data=None): return {"status": "success", "execution": data or {}}
 

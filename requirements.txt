@@ -7,8 +7,10 @@ pandas
 numpy
 # pandas-ta  # Requires Python 3.12+, will implement indicators manually
 
-# Hyperliquid SDK
-hyperliquid-python-sdk
+# Exchange SDKs
+python-binance>=1.0.20  # Binance SDK (1.0.20+ required for Demo Mode support)
+websockets==12.0        # For Binance WebSocket
+hyperliquid-python-sdk  # Hyperliquid SDK (keep for backward compatibility)
 
 # OpenClaw (already installed)
 # openclaw
