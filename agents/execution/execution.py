@@ -279,32 +279,36 @@ class ExecutionAgent:
                 # Handle paper trading order
                 return await self._place_paper_order(asset, side, leverage, order_type, price, size, reduce_only)
             else:
-                # Handle live trading order
+                # Handle live trading order using new SDK
+                is_buy = side.upper() in ["B", "BUY"]
                 order_data = {
                     "asset": asset,
-                    "side": side,
-                    "leverage": leverage,
-                    "orderType": order_type.upper(),
+                    "is_buy": is_buy,
                     "size": size,
-                    "reduceOnly": reduce_only
+                    "price": price,
+                    "order_type": order_type.lower(),
+                    "reduce_only": reduce_only
                 }
                 
-                if order_type.lower() == "limit":
-                    if price is None:
-                        raise ValueError("Price must be specified for limit orders")
-                    order_data["limitPrice"] = price
-                
-                self.logger.info(f"Placing {order_type} order: {side} {size} {asset} @ {price if price else 'MARKET'}")
+                self.logger.info(f"Placing {order_type} order: {'BUY' if is_buy else 'SELL'} {size} {asset} @ {price if price else 'MARKET'}")
                 
                 response = await self.api.place_order(order_data)
                 
-                order_result = OrderResult(
-                    success=True,
-                    order_id=response.get("order_id"),
-                    raw_response=response
-                )
+                if response.get("status") == "success":
+                    order_result = OrderResult(
+                        success=True,
+                        order_id=response.get("order_id"),
+                        raw_response=response
+                    )
+                    self.logger.info(f"Order placed successfully: {order_result.order_id}")
+                else:
+                    order_result = OrderResult(
+                        success=False,
+                        error=response.get("error", "Unknown error"),
+                        raw_response=response
+                    )
+                    self.logger.error(f"Order failed: {order_result.error}")
                 
-                self.logger.info(f"Order placed successfully: {order_result.order_id}")
                 return order_result
                 
         except Exception as e:

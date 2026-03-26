@@ -7,6 +7,9 @@ pandas
 numpy
 # pandas-ta  # Requires Python 3.12+, will implement indicators manually
 
+# Hyperliquid SDK
+hyperliquid-python-sdk
+
 # OpenClaw (already installed)
 # openclaw
 
