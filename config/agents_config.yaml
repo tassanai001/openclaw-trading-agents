@@ -1,0 +1,67 @@
+agents:
+  scanner:
+    enabled: true
+    cron: "*/5 * * * *"  # Every 5 minutes
+    timeout_seconds: 60
+    retry_count: 3
+    use_api_fallback: true  # Use pandas-ta if browser fails
+    
+  sentiment:
+    enabled: true
+    parallel: true  # Run parallel with scanner
+    sources:
+      - twitter:
+          accounts: ["elonmusk", "VitalikButerin", "cz_binance"]
+          weight: 0.8
+      - news:
+          sites: ["coindesk.com", "cointelegraph.com", "decrypt.co"]
+          weight: 0.7
+    use_llm: true  # Use LLM for analysis
+    timeout_seconds: 90
+    
+  strategy:
+    enabled: true
+    min_confidence: 0.7
+    timeout_seconds: 30
+    
+  risk:
+    enabled: true
+    check_daily_loss: true
+    check_exposure: true
+    timeout_seconds: 15
+    
+  execution:
+    enabled: true
+    dry_run: false
+    validate_slippage: true
+    max_slippage_pct: 0.005
+    check_liquidity: true
+    timeout_seconds: 30
+    
+  learning:
+    enabled: true
+    review_interval: "daily"
+    optimize_interval: "weekly"
+
+database:
+  type: sqlite
+  path: data/state.db
+  tables:
+    - portfolio_state
+    - positions
+    - trade_log
+    - performance_metrics
+    - scan_cache
+    - sentiment_cache
+
+notifications:
+  telegram:
+    enabled: true
+    bot_token: "${TELEGRAM_BOT_TOKEN}"
+    chat_id: "${TELEGRAM_CHAT_ID}"
+    alert_on:
+      - trade_executed
+      - risk_limit_hit
+      - slippage_warning
+      - daily_report
+      - error

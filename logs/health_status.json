@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "timestamp": "2026-03-26T00:00:51.691629",
+  "total_trades": 64,
+  "recent_trades": 64,
+  "portfolio": {
+    "balance": 10000.0,
+    "pnl": "{}"
+  },
+  "open_positions": 2,
+  "bot_running": false,
+  "status": "OK"
+}

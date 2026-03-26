@@ -1,0 +1,18 @@
+# Core
+pyyaml
+python-dotenv
+
+# Trading
+pandas
+numpy
+# pandas-ta  # Requires Python 3.12+, will implement indicators manually
+
+# OpenClaw (already installed)
+# openclaw
+
+# Networking
+httpx
+
+# Testing
+pytest
+pytest-asyncio

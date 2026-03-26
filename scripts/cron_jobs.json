@@ -1,0 +1,24 @@
+{
+  "cron_jobs": [
+    {
+      "name": "scanner-job",
+      "schedule": "*/5 * * * *",
+      "message": "Run Scanner Agent: analyze market data"
+    },
+    {
+      "name": "sentiment-job", 
+      "schedule": "*/5 * * * *",
+      "message": "Run Sentiment Agent: analyze market sentiment"
+    },
+    {
+      "name": "strategy-job",
+      "schedule": "*/5 * * * *", 
+      "message": "Run Strategy Agent: analyze signals from scanner and sentiment"
+    },
+    {
+      "name": "monitoring-job",
+      "schedule": "0 * * * *",
+      "message": "Run Monitoring Agent: system health and performance"
+    }
+  ]
+}
