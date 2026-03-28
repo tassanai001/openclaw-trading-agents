@@ -3,6 +3,7 @@ Scanner Configuration Module
 """
 import os
 from typing import List, Dict, Any
+from config.trading_config import TRADING_CONFIG
 
 # Scanner Configuration
 SCANNER_CONFIG = {
@@ -21,7 +22,7 @@ SCANNER_CONFIG = {
     },
     
     # Pairs to scan
-    "pairs": ["BTC/USDT", "ETH/USDT", "BNB/USDT"],
+    "pairs": TRADING_CONFIG["pairs"],
     
     # Database connection
     "database_path": os.getenv("DATABASE_PATH", "data/state.db"),
