@@ -7,7 +7,7 @@ Maintains backward compatibility with the existing orchestrator API.
 import asyncio
 import logging
 import os
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
 import time
 
@@ -18,6 +18,9 @@ from .models.order import Order, OrderResult
 from .models.position import Position, Balance
 from .models.common import ExchangeCredentials, OrderSide, OrderType, OrderStatus
 from .config import ExecutionConfig
+from .slippage_validator import SlippageValidator
+from .liquidity_checker import LiquidityChecker
+from .binance_price_fetcher import BinancePriceFetcher
 from config.paper_trading_config import PaperTradingConfig
 
 
@@ -201,8 +204,11 @@ class ExecutionAgent:
     ) -> OrderResult:
         """Handle paper trading order"""
         try:
-            # Simple paper trading implementation
-            execution_price = price or 50000.0  # Placeholder
+            if price is not None:
+                execution_price = price
+            else:
+                execution_price = await self._get_realistic_price(asset)
+            
             order_id = f"PAPER_{int(time.time())}_{self.paper_order_counter}"
             self.paper_order_counter += 1
             
@@ -297,6 +303,23 @@ class ExecutionAgent:
         
         logger.info(f"Executing signal: {side} {size} {asset} @ {price or 'MARKET'}")
         
+        symbol = asset if "USDT" in asset.upper() else f"{asset}USDT"
+        validation_side = "buy" if side.upper() in ["B", "BUY"] else "sell"
+        
+        if not await self.validate_slippage(symbol, validation_side, size, price):
+            return OrderResult(
+                success=False, 
+                error="Slippage validation failed", 
+                is_paper_trade=self.paper_trading_enabled
+            )
+        
+        if not await self.check_liquidity(symbol, validation_side, size):
+            return OrderResult(
+                success=False, 
+                error="Insufficient liquidity", 
+                is_paper_trade=self.paper_trading_enabled
+            )
+        
         return await self.place_order(asset, side, leverage, order_type, price, size)
     
     async def execute_from_signal(self, asset: str, signal: float) -> OrderResult:
@@ -387,6 +410,81 @@ class ExecutionAgent:
             "positions": positions,
             "paper_trading": False
         }
+    
+    async def validate_slippage(self, symbol: str, side: str, size: float, price: Optional[float] = None) -> bool:
+        """
+        Validate that slippage is within acceptable limits using real order book data
+        
+        Args:
+            symbol: Trading pair (e.g., "BTCUSDT")
+            side: "buy" or "sell"
+            size: Order size in base asset
+            price: Current market price (optional)
+            
+        Returns:
+            bool: True if slippage is acceptable
+        """
+        use_real_validation = getattr(self.config, 'use_real_validation', True)
+        max_slippage = getattr(self.config, 'max_slippage_percent', 0.5)
+        
+        if not use_real_validation:
+            current_slippage = 0.1
+            is_valid = current_slippage <= max_slippage
+            logger.debug(f"Mock slippage validation for {symbol}: {current_slippage}% <= {max_slippage}% = {is_valid}")
+            return is_valid
+        
+        try:
+            validator = SlippageValidator(self.exchange, self.config)
+            current_slippage = await validator.get_slippage(symbol, side, size, price)
+            is_valid = current_slippage <= max_slippage
+            logger.debug(f"Real slippage validation for {symbol}: {current_slippage:.3f}% <= {max_slippage}% = {is_valid}")
+            return is_valid
+        except Exception as e:
+            logger.error(f"Slippage validation failed for {symbol}: {e}")
+            return False
+    
+    async def check_liquidity(self, symbol: str, side: str, size: float) -> bool:
+        """
+        Check if there's sufficient liquidity for the order using real order book data
+        
+        Args:
+            symbol: Trading pair (e.g., "BTCUSDT")
+            side: "buy" or "sell"
+            size: Required order size
+            
+        Returns:
+            bool: True if liquidity is sufficient
+        """
+        use_real_validation = getattr(self.config, 'use_real_validation', True)
+        min_liquidity_usd = getattr(self.config, 'min_liquidity_usd', 50000.0)
+        
+        if not use_real_validation:
+            available_liquidity = 100000
+            is_sufficient = available_liquidity >= (size * 50000)
+            logger.debug(f"Mock liquidity check for {symbol}: {available_liquidity} >= {size * 50000} = {is_sufficient}")
+            return is_sufficient
+        
+        try:
+            checker = LiquidityChecker(self.exchange, self.config)
+            is_sufficient, available_size = await checker.check_liquidity(symbol, side, size)
+            logger.debug(f"Real liquidity check for {symbol}: sufficient={is_sufficient}, available_size={available_size}")
+            return is_sufficient
+        except Exception as e:
+            logger.error(f"Liquidity check failed for {symbol}: {e}")
+            return False
+    
+    async def _get_realistic_price(self, asset: str) -> float:
+        """Get realistic price from BinancePriceFetcher for paper trading"""
+        try:
+            fetcher = BinancePriceFetcher(demo_mode=True)
+            await fetcher.initialize()
+            price = await fetcher.get_price(asset)
+            if price and price > 0:
+                return price
+        except Exception as e:
+            logger.warning(f"Failed to get realistic price for {asset}: {e}")
+        
+        return 50000.0
     
     async def close(self):
         """Clean up resources"""

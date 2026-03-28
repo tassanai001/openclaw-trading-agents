@@ -18,6 +18,9 @@ from config.paper_trading_config import PaperTradingConfig
 
 from .hyperliquid_api import HyperliquidAPI, PriceFetcher
 from .config import ExecutionConfig
+from .slippage_validator import SlippageValidator
+from .liquidity_checker import LiquidityChecker
+from .binance_price_fetcher import BinancePriceFetcher
 
 
 class OrderType:
@@ -100,9 +103,7 @@ class ExecutionAgent:
     def _calculate_paper_order_price(self, price: Optional[float], side: str, size: float, order_type: str) -> float:
         """Calculate order price considering slippage and fees for paper trading"""
         if price is None:
-            # For market orders, we'd need to get current market price
-            # For simulation, let's return a placeholder - in a real system this would come from market data
-            simulated_price = 50000.0  # Placeholder - this should come from market data
+            simulated_price = asyncio.run(self._get_realistic_price("BTC"))
         else:
             simulated_price = price
             
@@ -248,8 +249,7 @@ class ExecutionAgent:
         """Validate paper trading order parameters"""
         # Calculate cost first (need this for min order check)
         if price is None:
-            # For market orders, use a placeholder price
-            price = 50000.0  # Placeholder
+            price = asyncio.run(self._get_realistic_price(asset))
         
         estimated_cost = size * price
         
@@ -419,15 +419,12 @@ class ExecutionAgent:
                 # Return paper trading account info
                 total_realized_pnl = sum(pos.realized_pnl for pos in self.paper_positions.values())
                 
-                # Calculate unrealized P&L based on current prices (placeholder)
-                # In a real implementation, you'd get current market prices to calculate unrealized P&L
-                total_unrealized_pnl = 0.0
-                for pos in self.paper_positions.values():
-                    if pos.size != 0:
-                        # Placeholder calculation - in reality, you'd use current market price
-                        current_price = 50000.0  # Placeholder
-                        pos.unrealized_pnl = pos.size * (current_price - pos.avg_entry_price)
-                        total_unrealized_pnl += pos.unrealized_pnl
+            total_unrealized_pnl = 0.0
+            for pos in self.paper_positions.values():
+                if pos.size != 0:
+                    current_price = asyncio.run(self._get_realistic_price(pos.asset))
+                    pos.unrealized_pnl = pos.size * (current_price - pos.avg_entry_price)
+                    total_unrealized_pnl += pos.unrealized_pnl
                 
                 total_equity = self.paper_balance + total_realized_pnl + total_unrealized_pnl
                 
@@ -475,12 +472,13 @@ class ExecutionAgent:
         
         self.logger.info(f"Executing order: {side} {size} {asset} @ {price or 'MARKET'} (action: {order_action or 'none'})")
         
-        # Validate slippage
-        if not self.validate_slippage(asset):
+        symbol = asset if "USDT" in asset.upper() else f"{asset}USDT"
+        validation_side = "buy" if normalized_side.upper() in ["B", "BUY"] else "sell"
+        
+        if not await self.validate_slippage(symbol, validation_side, size, price):
             return OrderResult(success=False, error="Slippage validation failed", is_paper_trade=self.paper_trading_enabled)
         
-        # Check liquidity
-        if not self.check_liquidity(asset, size):
+        if not await self.check_liquidity(symbol, validation_side, size):
             return OrderResult(success=False, error="Insufficient liquidity", is_paper_trade=self.paper_trading_enabled)
         
         # Place the order with normalized side
@@ -532,7 +530,7 @@ class ExecutionAgent:
         if asset in self.paper_positions:
             return self.paper_positions[asset].avg_entry_price
         
-        return 50000.0  # Fallback
+        return await self._get_realistic_price(asset)
     
     def signal_to_order(self, signal: float, current_position: Optional[Position] = None) -> Dict[str, Any]:
         """
@@ -636,6 +634,81 @@ class ExecutionAgent:
         
         return result
 
+    async def validate_slippage(self, symbol: str, side: str, size: float, price: Optional[float] = None) -> bool:
+        """
+        Validate that slippage is within acceptable limits using real order book data
+        
+        Args:
+            symbol: Trading pair (e.g., "BTCUSDT")
+            side: "buy" or "sell"
+            size: Order size in base asset
+            price: Current market price (optional)
+            
+        Returns:
+            bool: True if slippage is acceptable
+        """
+        use_real_validation = getattr(self.config, 'use_real_validation', True)
+        max_slippage = getattr(self.config, 'max_slippage_percent', 0.5)
+        
+        if not use_real_validation:
+            current_slippage = 0.1
+            is_valid = current_slippage <= max_slippage
+            self.logger.debug(f"Mock slippage validation for {symbol}: {current_slippage}% <= {max_slippage}% = {is_valid}")
+            return is_valid
+        
+        try:
+            validator = SlippageValidator("hyperliquid", self.config)
+            current_slippage = await validator.get_slippage(symbol, side, size, price)
+            is_valid = current_slippage <= max_slippage
+            self.logger.debug(f"Real slippage validation for {symbol}: {current_slippage:.3f}% <= {max_slippage}% = {is_valid}")
+            return is_valid
+        except Exception as e:
+            self.logger.error(f"Slippage validation failed for {symbol}: {e}")
+            return False
+    
+    async def check_liquidity(self, symbol: str, side: str, size: float) -> bool:
+        """
+        Check if there's sufficient liquidity for the order using real order book data
+        
+        Args:
+            symbol: Trading pair (e.g., "BTCUSDT")
+            side: "buy" or "sell"
+            size: Required order size
+            
+        Returns:
+            bool: True if liquidity is sufficient
+        """
+        use_real_validation = getattr(self.config, 'use_real_validation', True)
+        min_liquidity_usd = getattr(self.config, 'min_liquidity_usd', 50000.0)
+        
+        if not use_real_validation:
+            available_liquidity = 100000
+            is_sufficient = available_liquidity >= (size * 50000)
+            self.logger.debug(f"Mock liquidity check for {symbol}: {available_liquidity} >= {size * 50000} = {is_sufficient}")
+            return is_sufficient
+        
+        try:
+            checker = LiquidityChecker("hyperliquid", self.config)
+            is_sufficient, available_size = await checker.check_liquidity(symbol, side, size)
+            self.logger.debug(f"Real liquidity check for {symbol}: sufficient={is_sufficient}, available_size={available_size}")
+            return is_sufficient
+        except Exception as e:
+            self.logger.error(f"Liquidity check failed for {symbol}: {e}")
+            return False
+    
+    async def _get_realistic_price(self, asset: str) -> float:
+        """Get realistic price from BinancePriceFetcher for paper trading"""
+        try:
+            fetcher = BinancePriceFetcher(demo_mode=True)
+            await fetcher.initialize()
+            price = await fetcher.get_price(asset)
+            if price and price > 0:
+                return price
+        except Exception as e:
+            self.logger.warning(f"Failed to get realistic price for {asset}: {e}")
+        
+        return 50000.0
+    
     async def close(self):
         """Clean up resources"""
         if hasattr(self, 'price_fetcher'):

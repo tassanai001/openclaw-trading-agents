@@ -11,14 +11,14 @@ Centralized configuration for trading parameters, agent settings, database schem
 
 ```
 config/
-├── trading_config.py       # Global trading parameters
-├── agents_config.yaml      # Agent-specific settings (if exists)
-├── db_schema.py            # SQLite schema definition
-├── db.py                   # Database connection utilities
-├── exchange_config.py      # Exchange credentials
-├── paper_trading_config.py # Paper trading mode settings
-├── db_logger.py            # Database logging utilities
-└── orchestrator_config.py  # Orchestrator settings
+├── trading_config.py       # Global trading parameters (pairs, thresholds, risk)
+├── agents_config.yaml      # Agent-specific settings (scanner, sentiment, strategy, risk, execution, learning)
+├── db_schema.py            # SQLite schema definition (portfolio_state, positions, trade_log, etc.)
+├── db.py                   # Database connection utilities and wrapper
+├── exchange_config.py      # Exchange credentials loading from environment variables
+├── paper_trading_config.py # Paper trading mode settings and mock execution
+├── db_logger.py            # Database logging utilities for trade history
+└── orchestrator_config.py  # OpenClaw orchestrator settings and cron integration
 ```
 
 ## WHERE TO LOOK

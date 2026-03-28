@@ -31,6 +31,8 @@ agents/scanner/
 - **RSI**: 14-period
 - **MACD**: 12/26/9
 - **Signals**: -1.0 (SELL) to 1.0 (BUY), normalized across factors
+- **Manual indicators**: Implemented without pandas-ta for Python 3.10+ compatibility
+- **Mock fallback**: Real data unavailable → deterministic mock data with cyclical patterns
 
 ## ANTI-PATTERNS
 

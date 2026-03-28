@@ -43,8 +43,12 @@ agents/
 - **Mock fallback**: Real data unavailable → deterministic mock data
 - **Adapter pattern**: Exchange support via unified interface
 
-## ANTI-PATTERNS
+## ANTI-PATTERNS (THIS PROJECT)
 
-- **Never** hardcode API keys — use environment variables
-- **Never** skip circuit breakers — halt at F&G < 20 or > 80
-- **Never** exceed 5% daily loss or 5 open positions
+- **Never** hardcode API credentials — use environment variables
+- **Never** skip circuit breakers — halt trading at extreme F&G values (<20 or >80)
+- **Never** exceed daily loss limit — auto-stop at 5% loss
+- **Never** open >5 positions simultaneously
+- **Never** allow slippage >0.5% on execution
+- **Never** override risk limits — all trades must pass `validate_trade()`
+- **Never** skip daily reset at midnight

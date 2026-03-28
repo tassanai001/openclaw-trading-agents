@@ -11,16 +11,24 @@ Pytest-based test suite with fixtures and async support. Configuration in `conft
 
 ```
 tests/
-├── conftest.py      # Pytest fixtures & path setup
-└── adapters/        # Adapter-specific tests
+├── conftest.py              # Pytest configuration with path setup
+├── test_integration.py      # Full 6-agent trading cycle integration test
+├── test_safety.py           # Safety circuit breakers and risk limits
+├── test_db.py               # Database operations and state management
+├── test_risk.py             # Risk agent validation and limits
+└── adapters/                # Exchange adapter-specific tests (binance, hyperliquid)
 ```
 
 ## WHERE TO LOOK
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Test fixtures | `conftest.py` | pytest fixtures, path setup |
-| Adapter tests | `tests/adapters/` | Exchange-specific tests |
+| Test configuration | `conftest.py` | pytest fixtures, path setup |
+| Full trading cycle | `test_integration.py` | End-to-end 6-agent workflow |
+| Safety features | `test_safety.py` | Circuit breakers, risk limits, emergency stop |
+| Database operations | `test_db.py` | State management, positions, trades |
+| Risk validation | `test_risk.py` | Position sizing, daily loss, max positions |
+| Exchange adapters | `tests/adapters/` | Binance/Hyperliquid specific functionality |
 
 ## CONVENTIONS
 

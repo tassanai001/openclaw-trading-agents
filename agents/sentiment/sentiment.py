@@ -1,6 +1,6 @@
 """
 Sentiment Analysis Agent
-Analyzes Twitter and News sentiment, returns score between -1 and 1
+Analyzes Twitter and News sentiment using real APIs and NLP model, returns score between -1 and 1
 """
 
 import asyncio
@@ -10,6 +10,9 @@ import numpy as np
 from typing import Dict, List, Optional, Union, Any
 from datetime import datetime
 from .config import SentimentConfig
+from .nlp_analyzer import NLPSentimentAnalyzer
+from .twitter_client import TwitterClient
+from .news_client import NewsClient
 
 
 class SentimentAgent:
@@ -22,6 +25,11 @@ class SentimentAgent:
         self._twitter_sources = []
         self._news_sources = []
         self.logger = logging.getLogger(__name__)
+        
+        self.nlp_analyzer = NLPSentimentAnalyzer()
+        self.twitter_client = TwitterClient()
+        self.news_client = NewsClient()
+        self.use_real_sentiment = getattr(self.config, 'use_real_sentiment', True)
         
     async def analyze(self, text: str) -> float:
         """
@@ -88,21 +96,61 @@ class SentimentAgent:
             'source': 'news'
         }
     
+    async def _fetch_real_sentiment_data(self, trading_pairs: Optional[List[str]] = None) -> tuple:
+        """
+        Fetch real Twitter and News data using API clients.
+        
+        Args:
+            trading_pairs: List of trading pairs to fetch data for
+            
+        Returns:
+            tuple: (twitter_tweets, news_articles)
+        """
+        if not self.use_real_sentiment:
+            return [], []
+            
+        twitter_tweets = []
+        news_articles = []
+        
+        try:
+            if self.twitter_client.enabled and trading_pairs:
+                symbols = [pair.replace('USDT', '') for pair in trading_pairs]
+                twitter_tweets = await self.twitter_client.get_crypto_tweets(symbols, max_results=50)
+        except Exception as e:
+            self.logger.error(f"Error fetching Twitter data: {e}")
+            
+        try:
+            if self.news_client.enabled and trading_pairs:
+                news_articles = await self.news_client.get_relevant_news(trading_pairs)
+        except Exception as e:
+            self.logger.error(f"Error fetching News data: {e}")
+            
+        return twitter_tweets, news_articles
+    
     async def get_overall_sentiment(self, twitter_data: Optional[List[str]] = None, 
                                   news_data: Optional[List[Dict]] = None,
-                                  include_fng: bool = True) -> Dict:
+                                  include_fng: bool = True,
+                                  trading_pairs: Optional[List[str]] = None) -> Dict:
         """
         Get overall sentiment combining Twitter, News, and Fear & Greed Index
         
         Args:
-            twitter_data: List of tweets
-            news_data: List of news articles
+            twitter_data: List of tweets (if None, fetches real data when enabled)
+            news_data: List of news articles (if None, fetches real data when enabled)
             include_fng: Whether to include Fear & Greed Index
+            trading_pairs: Trading pairs to fetch data for (required when fetching real data)
             
         Returns:
             Dict: Combined sentiment analysis
         """
         results = {}
+        
+        if (twitter_data is None or news_data is None) and self.use_real_sentiment:
+            fetched_twitter, fetched_news = await self._fetch_real_sentiment_data(trading_pairs)
+            if twitter_data is None:
+                twitter_data = fetched_twitter
+            if news_data is None:
+                news_data = fetched_news
         
         has_social_data = (twitter_data and len(twitter_data) > 0) or (news_data and len(news_data) > 0)
         
@@ -127,7 +175,7 @@ class SentimentAgent:
                 }
                 has_fng = True
             
-        if not has_social_data and not has_fng:
+        if not self.use_real_sentiment and not has_social_data and not has_fng:
             results['mock'] = self._generate_mock_sentiment()
         
         # When only one source, return that source's score
@@ -254,7 +302,7 @@ class SentimentAgent:
     
     async def _analyze_sentiment(self, text: str) -> float:
         """
-        Internal method to analyze sentiment of text (mock implementation)
+        Internal method to analyze sentiment of text using NLP model
         
         Args:
             text: Text to analyze
@@ -262,55 +310,10 @@ class SentimentAgent:
         Returns:
             float: Sentiment score between -1 and 1
         """
-        # In a real implementation, this would use an NLP model or API
-        # For now, we'll simulate with a more sophisticated mock
-        
-        # Convert to lowercase for processing
-        text_lower = text.lower()
-        
-        # Define some basic positive and negative words
-        positive_words = [
-            'good', 'great', 'excellent', 'positive', 'amazing', 'wonderful',
-            'fantastic', 'incredible', 'outstanding', 'perfect', 'brilliant',
-            'profit', 'gains', 'bullish', 'up', 'rise', 'success', 'strong',
-            'buy', 'optimistic', 'hopeful', 'beneficial', 'advantageous'
-        ]
-        
-        negative_words = [
-            'bad', 'terrible', 'awful', 'negative', 'horrible', 'disappointing',
-            'poor', 'worst', 'failure', 'disaster', 'crash', 'fall', 'loss',
-            'sell', 'pessimistic', 'concern', 'risk', 'danger', 'decline',
-            'weak', 'bearish', 'trouble', 'problem', 'issue'
-        ]
-        
-        # Count positive and negative words
-        pos_count = sum(1 for word in positive_words if word in text_lower)
-        neg_count = sum(1 for word in negative_words if word in text_lower)
-        
-        # Calculate base score
-        total_words = len(text.split())
-        if total_words == 0:
+        if not text:
             return 0.0
             
-        # Calculate normalized score (-1 to 1 range)
-        if pos_count == 0 and neg_count == 0:
-            # If no sentiment words found, return a small random value
-            return round(random.uniform(-0.1, 0.1), 3)
-        
-        # Calculate sentiment ratio
-        sentiment_ratio = (pos_count - neg_count) / max(pos_count + neg_count, 1)
-        
-        # Apply intensity based on the number of sentiment words
-        intensity_factor = min((pos_count + neg_count) / 10.0, 1.0)
-        
-        # Base score with intensity
-        base_score = sentiment_ratio * min(intensity_factor * 2.0, 1.0)
-        
-        # Add slight randomness to make it more realistic
-        noise = random.uniform(-0.05, 0.05)
-        final_score = base_score + noise
-        
-        return round(max(-1.0, min(1.0, final_score)), 3)
+        return self.nlp_analyzer.analyze(text)
 
 
 # For backward compatibility

@@ -18,6 +18,11 @@ hyperliquid-python-sdk  # Hyperliquid SDK (keep for backward compatibility)
 # Networking
 httpx
 
+# NLP and Sentiment Analysis
+transformers
+torch
+tweepy
+
 # Testing
 pytest
 pytest-asyncio

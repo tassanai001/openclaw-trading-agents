@@ -14,11 +14,13 @@ openclaw-trading-agents/
 ├── agents/          # 6 trading agents (scanner, sentiment, strategy, risk, execution, learning)
 ├── config/          # Configuration (trading, agent, database, exchange)
 ├── tests/           # Unit & integration tests (pytest)
-├── scripts/         # Setup & health check scripts
+├── scripts/         # Setup, cron registration, health checks, emergency stop
 ├── reports/         # Performance reports
 ├── documents/       # Documentation (MASTER_PLAN.md)
 ├── data/            # SQLite database (state.db)
-└── memory/          # Daily reports & performance summaries
+├── memory/          # Daily reports & performance summaries
+├── logs/            # Application logs
+└── .env.example     # Environment variable template
 ```
 
 ## WHERE TO LOOK
@@ -79,6 +81,10 @@ pip install -r requirements.txt
 # Initialize database
 python -c "import sqlite3; from config.db_schema import DB_SCHEMA; conn = sqlite3.connect('data/state.db'); conn.executescript(DB_SCHEMA); conn.commit(); conn.close()"
 
+# Setup agents and register cron jobs
+./scripts/setup_agents.sh
+./scripts/register_crons.sh
+
 # Run scanner agent
 openclaw agent scanner
 
@@ -87,6 +93,12 @@ openclaw run trading-cycle
 
 # Run tests
 pytest tests/
+
+# Health check
+./scripts/health_check.sh
+
+# Emergency stop (closes all positions)
+./scripts/emergency_stop.sh
 
 # View portfolio state
 sqlite3 data/state.db "SELECT * FROM portfolio_state ORDER BY timestamp DESC LIMIT 1;"
@@ -104,3 +116,6 @@ sqlite3 data/state.db "SELECT * FROM trade_log ORDER BY timestamp DESC LIMIT 10;
 - **Paper trading**: Enable via `config/paper_trading_config.py`
 - **Scan interval**: 5 minutes via cron
 - **Pairs**: Top 10 crypto (BTC, ETH, BNB, SOL, XRP, ADA, DOGE, AVAX, TRX, LINK) / USDT
+- **OpenClaw Platform**: Custom orchestration platform for agent management and cron scheduling
+- **No Standard CI/CD**: Uses OpenClaw gateway instead of GitHub Actions or similar tools
+- **Manual Indicators**: pandas-ta excluded for Python 3.10+ compatibility - indicators implemented manually

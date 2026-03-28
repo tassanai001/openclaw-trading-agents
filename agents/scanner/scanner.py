@@ -11,6 +11,7 @@ import numpy as np
 import sqlite3
 
 from .config import get_config, get_timeframes, get_pairs
+from .binance_klines_client import BinanceKlinesClient
 from agents.execution.binance_price_fetcher import BinancePriceFetcher
 
 
@@ -24,9 +25,14 @@ class Scanner:
         self.timeframes = get_timeframes()
         self.pairs = get_pairs()
         self.db_path = self.config["database_path"]
+        self.use_real_data = self.config.get("use_real_market_data", True)
         
         # Initialize Binance price fetcher
         self.price_fetcher = BinancePriceFetcher(demo_mode=True)
+        
+        self.klines_client = None
+        if self.use_real_data:
+            self.klines_client = BinanceKlinesClient(demo_mode=True)
         
         # Setup logging
         logging.basicConfig(level=self.config["log_level"])
@@ -371,6 +377,21 @@ class Scanner:
         """
         try:
             asset = pair.replace("/USDT", "").replace("-PERP", "")
+            
+            if self.use_real_data and self.klines_client is not None:
+                try:
+                    klines_df = await self.klines_client.get_klines(
+                        symbol=asset, 
+                        timeframe=timeframe, 
+                        limit=100
+                    )
+                    if klines_df is not None and len(klines_df) >= 50:
+                        self.logger.info(f"Fetched real klines data for {asset} on {timeframe}")
+                        return klines_df
+                    else:
+                        self.logger.warning(f"Insufficient real klines data for {asset} on {timeframe}, falling back")
+                except Exception as e:
+                    self.logger.error(f"Real klines fetch failed for {asset} on {timeframe}: {e}")
             
             current_price = await self.price_fetcher.get_price(asset)
             

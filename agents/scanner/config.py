@@ -28,6 +28,8 @@ SCANNER_CONFIG = {
     
     # Logging
     "log_level": os.getenv("LOG_LEVEL", "INFO"),
+    
+    "use_real_market_data": os.getenv("USE_REAL_MARKET_DATA", "true").lower() == "true",
 }
 
 def get_config() -> Dict[str, Any]:
