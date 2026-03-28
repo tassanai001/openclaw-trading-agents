@@ -68,10 +68,13 @@ def check_bot_health():
             try:
                 with open(log_file, 'r') as f:
                     lines = f.readlines()[-100:]  # Last 100 lines
-                    # Count only recent errors
+                    # Count only recent errors (exclude aiohttp unclosed session warnings)
                     recent_errors = []
                     for l in lines:
-                        if 'ERROR' in l or 'Exception' in l:
+                        # Skip non-critical aiohttp cleanup warnings
+                        if 'Unclosed client session' in l or 'Unclosed connector' in l:
+                            continue
+                        if 'ERROR' in l or 'Exception' in l or 'Traceback' in l:
                             # Try to parse timestamp
                             try:
                                 ts_str = l.split(' - ')[0]
@@ -86,11 +89,25 @@ def check_bot_health():
             except:
                 pass
     
-    # Check if bot process is running
-    import subprocess
+    # Check if bot completed recent cycles successfully
     try:
-        result = subprocess.run(['pgrep', '-f', 'health_check.py'], capture_output=True)
-        status["bot_running"] = result.returncode == 0
+        cycle_log = Path('logs/trading_cycle.log')
+        if cycle_log.exists():
+            with open(cycle_log, 'r') as f:
+                lines = f.readlines()[-20:]
+                # Check if last cycle completed successfully
+                for l in reversed(lines):
+                    if 'completed successfully' in l:
+                        status["bot_running"] = True
+                        break
+                    elif 'ERROR' in l or 'Exception' in l or 'Traceback' in l:
+                        if 'Unclosed' not in l:  # Skip aiohttp warnings
+                            status["bot_running"] = False
+                            break
+                else:
+                    status["bot_running"] = "unknown"
+        else:
+            status["bot_running"] = False
     except:
         status["bot_running"] = "unknown"
     
@@ -118,8 +135,12 @@ def send_telegram_alert(message):
     """Send alert via Telegram"""
     try:
         import subprocess
-        token = os.getenv('TELEGRAM_BOT_TOKEN', '8370864419:AAHqA_EP5ebCjSqaqWfLb4kwWds1aMJ51nk')
-        chat_id = os.getenv('TELEGRAM_CHAT_ID', '8062364760')
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        
+        if not token or not chat_id:
+            print("❌ Telegram Bot Token or Chat ID not configured")
+            return False
         
         # Escape special characters for MarkdownV2
         escaped_message = escape_markdown_v2(message)

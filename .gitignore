@@ -1,20 +1,70 @@
-# Database files
+# ============================================
+# DATABASE FILES
+# ============================================
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
+state.db
+trading.db
+data/*.db
+data/*.sqlite
 
-# Environment variables and secrets
+# ============================================
+# ENVIRONMENT VARIABLES & SECRETS (CRITICAL)
+# ============================================
+.env
+.env.*
+!.env.example
+!.env.template
 *.env
 secrets.env
 .env.local
 .env.production
 
-# Logs
-logs/*.log
-*.log
+# API Keys and Credentials
+*.key
+*.pem
+*.p12
+*.jks
+*.keystore
+id_rsa
+id_rsa.*
+credentials.json
+serviceAccount*.json
+*aws*
+*credentials*
 
-# Python
+# Files that might contain credentials
+*config*local*
+*config*dev*
+*config*private*
+*config*secret*
+
+# ============================================
+# LOGS (may contain sensitive trading data)
+# ============================================
+logs/
+*.log
+*.log.*
+logs/*.json
+logs/*.jsonl
+
+# ============================================
+# REPORTS & TRADING LOGS (auto-generated)
+# ============================================
+reports/
+research-reports/
+trading_log_*.md
+*_REPORT.md
+STATUS_*.md
+MONITOR*.md
+MORNING_REPORT_*.md
+OVERNIGHT_*.md
+
+# ============================================
+# PYTHON
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -35,32 +85,78 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+*.pyc
+*.pyo
 
-# Virtual environments
+# ============================================
+# VIRTUAL ENVIRONMENTS
+# ============================================
 venv/
 env/
 ENV/
 .venv
+.pyenv/
 
-# IDE
+# ============================================
+# IDE & EDITORS
+# ============================================
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
+# ============================================
 # macOS
+# ============================================
 .DS_Store
 .AppleDouble
 .LSOverride
+._*
 
-# Testing
+# ============================================
+# TESTING
+# ============================================
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
 .nox/
+.nyc_output/
+cache/
+.cache
 
-# OpenClaw
+# ============================================
+# BUILD ARTIFACTS
+# ============================================
+build/
+dist/
+*.egg
+.eggs/
+eggs/
+share/
+python-build
+
+# ============================================
+# TEMPORARY FILES
+# ============================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# ============================================
+# SCRIPTS (auto-generated or local)
+# ============================================
+monitor.sh
+run_cycle.py
+
+# ============================================
+# OPENCLAW / OPENCODE
+# ============================================
 .opencode/node_modules/
 .opencode/.gitignore

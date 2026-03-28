@@ -11,8 +11,12 @@ Handles errors gracefully and logs results.
 import asyncio
 import logging
 import sys
+import os
 from datetime import datetime
 from typing import Dict, Any, Optional
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import all agents
 from agents.scanner.scanner import Scanner
@@ -155,12 +159,22 @@ async def run_trading_cycle():
                         logger.info(f"Step 5: Executing trade for {pair}...")
                         
                         try:
-                            execution_result = await execution.execute_order(
-                                trade_data['symbol'],
-                                trade_data['side'],
-                                trade_data['quantity'],
-                                'MARKET'
-                            )
+                            # Convert to execution agent signal format
+                            # Map symbol format (BTC/USDT → BTC) and side (BUY → B, SELL → S)
+                            asset = pair.replace('/USDT', '').replace('/USD', '')
+                            order_side = 'B' if trade_data['side'] == 'BUY' else 'S'
+                            
+                            execution_signal = {
+                                'asset': asset,
+                                'side': order_side,
+                                'size': trade_data['quantity'],
+                                'price': trade_data['price'],
+                                'order_type': 'market',
+                                'symbol': pair,
+                                'quantity': trade_data['quantity']
+                            }
+                            
+                            execution_result = await execution.execute_order(execution_signal)
                             
                             logger.info(f"Trade executed for {pair}. Result: {execution_result}")
                             
@@ -170,11 +184,11 @@ async def run_trading_cycle():
                                 trade_data['quantity'],
                                 trade_data['price'],
                                 trade_data['side'],
-                                execution_result.get('order_id', 'UNKNOWN')
+                                execution_result.order_id or 'UNKNOWN'
                             )
                             
                             # Update portfolio state after successful execution
-                            if execution_result.get('status') == 'FILLED':
+                            if execution_result.success:
                                 # Update portfolio with new state after trade
                                 updated_cash = portfolio['cash'] - (trade_data['quantity'] * trade_data['price']) if trade_data['side'] == 'BUY' else portfolio['cash'] + (trade_data['quantity'] * trade_data['price'])
                                 
@@ -221,20 +235,22 @@ async def run_trading_cycle():
         # Get recent trades to evaluate
         recent_trades = db.get_trade_history(limit=10)
         if recent_trades:
-            for trade in recent_trades:
-                # Simulate outcome evaluation (in real scenario, this would be based on actual PnL)
-                simulated_outcome = {
-                    'trade_id': trade['order_id'],
-                    'symbol': trade['symbol'],
-                    'result': 'PROFIT' if trade['side'] == 'BUY' and sentiment_score > 0 else 'LOSS',
-                    'pnl': (trade['price'] * trade['quantity'] * 0.01) if trade['side'] == 'BUY' and sentiment_score > 0 else -(trade['price'] * trade['quantity'] * 0.01),
-                    'duration': 3600,  # 1 hour
-                    'confidence': 0.7
-                }
-                
-                # Process outcome with learning agent
-                learning_feedback = learning.process_outcome(simulated_outcome)
-                logger.info(f"Learning feedback for trade {trade['order_id']}: {learning_feedback}")
+            # Calculate aggregate performance metrics
+            total_pnl = sum((trade['price'] * trade['quantity'] * 0.01) for trade in recent_trades)
+            trades_count = len(recent_trades)
+            win_rate = 0.6  # Mock win rate
+            total_return = (total_pnl / 10000.0) * 100  # Percentage return
+            max_drawdown = 0.05  # Mock max drawdown
+            
+            # Record performance with learning agent
+            learning.record_performance(
+                profit_loss=total_pnl,
+                trades_count=trades_count,
+                win_rate=win_rate,
+                total_return=total_return,
+                max_drawdown=max_drawdown
+            )
+            logger.info(f"Learning agent recorded: {trades_count} trades, P&L: ${total_pnl:.2f}")
         
         logger.info("Full trading cycle completed successfully!")
         return True

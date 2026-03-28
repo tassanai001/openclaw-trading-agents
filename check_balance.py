@@ -9,8 +9,16 @@ from hyperliquid.info import Info
 from eth_account import Account
 
 # Load from .env
-api_key = os.getenv("HYPERLIQUID_API_KEY", "0x08330F51dd8cAEd217d4DbdD42f10680C0542A01")
+api_key = os.getenv("HYPERLIQUID_API_KEY")
 api_secret = os.getenv("HYPERLIQUID_API_SECRET")
+
+if not api_key:
+    print("❌ HYPERLIQUID_API_KEY not configured in .env")
+    sys.exit(1)
+
+if not api_secret:
+    print("❌ HYPERLIQUID_API_SECRET not configured in .env")
+    sys.exit(1)
 
 print("=" * 60)
 print("🔍 Hyperliquid Testnet Wallet Balance Check")
